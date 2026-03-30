@@ -1,5 +1,6 @@
 import json
 import os
+from urllib.parse import unquote_plus
 import pandas as pd
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -8,7 +9,7 @@ from googleapiclient.discovery import build
 class GoogleSheetsManager:
     def __init__(self):
         self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
-        self.sheet_name = os.getenv('SHEET_NAME', 'Sheet1')
+        self.sheet_name = unquote_plus(os.getenv('SHEET_NAME', 'Sheet1'))
 
         if not self.spreadsheet_id:
             raise ValueError("SPREADSHEET_ID belum diset!")
