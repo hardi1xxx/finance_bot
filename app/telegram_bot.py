@@ -34,6 +34,9 @@ class FinanceBot:
     # TEXT AI AUTO INPUT
     # =========================
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not update.message or not update.message.text:
+            return
+
         text = update.message.text
 
         try:
