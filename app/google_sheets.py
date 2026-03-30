@@ -1,86 +1,144 @@
 import json
 import os
+import time
+import requests
 from urllib.parse import unquote_plus
 import pandas as pd
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import logging
 
+logger = logging.getLogger(__name__)
 
 class GoogleSheetsManager:
     def __init__(self):
         self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
         self.sheet_name = unquote_plus(os.getenv('SHEET_NAME', 'Sheet1'))
+        
+        # DEBUG: Log env vars (masked)
+        logger.info(f"🌐 Env - SPREADSHEET_ID: {self.spreadsheet_id[:20]}...")
+        logger.info(f"🌐 Env - SHEET_NAME: {self.sheet_name}")
 
         if not self.spreadsheet_id:
-            raise ValueError("SPREADSHEET_ID belum diset!")
+            raise ValueError("SPREADSHEET_ID kosong! Set di Rainway dashboard")
 
-        scopes = ['https://www.googleapis.com/auth/spreadsheets']
-        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        self.scopes = ['https://www.googleapis.com/auth/spreadsheets']
+        
+        # Fix multiline JSON untuk Rainway
+        creds_json_raw = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        if not creds_json_raw:
+            raise ValueError("GOOGLE_CREDENTIALS_JSON kosong! Set di Rainway dashboard")
+        
+        try:
+            # Fix escaped newlines
+            creds_json = creds_json_raw.replace('\\\\n', '\n').replace('\\n', '\n')
+            creds_info = json.loads(creds_json)
+            
+            # Validate required fields
+            required = ['client_email', 'private_key']
+            missing = [k for k in required if k not in creds_info]
+            if missing:
+                raise ValueError(f"Missing credentials: {missing}")
+                
+            creds = Credentials.from_service_account_info(creds_info, scopes=self.scopes)
+            logger.info(f"✅ Auth OK - {creds_info.get('client_email')}")
+        except Exception as e:
+            logger.error(f"❌ Auth failed: {e}")
+            raise ValueError(f"Credentials invalid: {str(e)[:100]}...")
 
-        if creds_json:
+        # Build dengan retry
+        for attempt in range(3):
             try:
-                creds_info = json.loads(creds_json)
-                creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-            except (json.JSONDecodeError, ValueError) as e:
-                raise ValueError(f"GOOGLE_CREDENTIALS_JSON invalid: {e}")
-        else:
-            raise ValueError("GOOGLE_CREDENTIALS_JSON belum diset!")
-
-        self.service = build('sheets', 'v4', credentials=creds)
+                self.service = build('sheets', 'v4', credentials=creds)
+                # Test connection
+                self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+                logger.info("✅ Google Sheets connected!")
+                break
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt+1} failed: {e}")
+                if attempt == 2:
+                    raise
+                time.sleep(2)
 
     def append_data(self, data: dict):
         values = [[
-            data['date'],
-            data['type'],
-            data['amount'],
-            data['description'],
-            data['category'],
-            data['source']
+            data.get('date', ''),
+            data.get('type', ''),
+            float(data.get('amount', 0)),
+            data.get('description', '')[:50],
+            data.get('category', ''),
+            data.get('source', '')
         ]]
 
-        try:
-            self.service.spreadsheets().values().append(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{self.sheet_name}!A:F",  # Mulai dari A1, append akan otomatis
-                valueInputOption='RAW',
-                insertDataOption='INSERT_ROWS',
-                body={'values': values}
-            ).execute()
-        except HttpError as e:
-            raise RuntimeError(f"Google Sheets API error saat append data: {e}") from e
-        except Exception as e:
-            raise RuntimeError(f"Unexpected error saat append data: {e}") from e
+        for attempt in range(3):
+            try:
+                result = self.service.spreadsheets().values().append(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{self.sheet_name}!A:F",
+                    valueInputOption='USER_ENTERED',  # Better formatting
+                    insertDataOption='INSERT_ROWS',
+                    body={'values': values}
+                ).execute()
+                
+                logger.info(f"✅ Saved: {data['description'][:30]}...")
+                return True
+                
+            except HttpError as e:
+                logger.error(f"HTTP {e.resp.status}: {e}")
+                if e.resp.status == 429:  # Rate limit
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RuntimeError(f"API error {e.resp.status}: {e}")
+            except Exception as e:
+                logger.error(f"Append error: {e}")
+                if attempt == 2:
+                    raise RuntimeError(f"Gagal simpan setelah 3x coba: {e}")
+                time.sleep(1)
+        return False
 
     def get_summary(self):
         try:
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{self.sheet_name}!A1:F1000"  # Limit range untuk performa
+                range=f"{self.sheet_name}!A1:F"
             ).execute()
 
             rows = result.get('values', [])
-            if len(rows) < 1:
-                return dict(total_income=0, total_expense=0, balance=0, total_transactions=0)
-
-            # Pastikan header ada
             if len(rows) < 2:
-                return dict(total_income=0, total_expense=0, balance=0, total_transactions=0)
+                return {'total_income': 0, 'total_expense': 0, 'balance': 0, 'total_transactions': 0}
 
-            df = pd.DataFrame(rows[1:], columns=rows[0])
+            # Simple parsing tanpa pandas (lebih reliable di serverless)
+            headers = [h.lower() for h in rows[0]]
+            transactions = []
             
-            # Convert amount ke numeric dengan handling error
-            df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
-            df = df.dropna(subset=['amount', 'type'])  # Hapus row yang amount-nya invalid
+            for row in rows[1:]:
+                if len(row) < 3:
+                    continue
+                try:
+                    amount_idx = headers.index('amount')
+                    type_idx = headers.index('type')
+                    amount = float(str(row[amount_idx]).replace(',', ''))
+                    trans_type = str(row[type_idx]).lower()
+                    
+                    transactions.append({
+                        'amount': amount,
+                        'type': trans_type
+                    })
+                except:
+                    continue
 
-            income = df[df['type'] == 'Pemasukan']['amount'].sum() or 0
-            expense = df[df['type'] == 'Pengeluaran']['amount'].sum() or 0
+            income = sum(t['amount'] for t in transactions if 'pemasukan' in t['type'])
+            expense = sum(t['amount'] for t in transactions if 'pengeluaran' in t['type'])
 
+            logger.info(f"📊 Summary: {len(transactions)} tx, income={income}, expense={expense}")
+            
             return {
                 'total_income': float(income),
                 'total_expense': float(expense),
                 'balance': float(income - expense),
-                'total_transactions': len(df)
+                'total_transactions': len(transactions)
             }
         except Exception as e:
-            raise RuntimeError(f"Error saat get summary: {e}") from e
+            logger.error(f"Summary error: {e}")
+            return {'total_income': 0, 'total_expense': 0, 'balance': 0, 'total_transactions': 0}

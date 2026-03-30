@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ['python311Full', 'gcc', 'glibc', 'tesseract', 'libpng', 'libjpeg']
+
+[phases.build]
+cmds = [
+  'pip install --no-cache-dir -r requirements.txt',
+  'pytesseract --version'
+]

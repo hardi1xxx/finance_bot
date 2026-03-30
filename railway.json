@@ -1,11 +1,13 @@
 {
-  "$schema": "https://railway.app/railway.schema.json",
+  "name": "finance-bot",
+  "version": "1.0.0",
+  "main": "app/main.py",
   "build": {
-    "builder": "DOCKERFILE"
+    "builder": "NIXPACKS"
   },
-  "deploy": {
-    "startCommand": "python -m app.main",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
+  "env": {
+    "PIP_NO_CACHE_DIR": "1",
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_DEFAULT_TIMEOUT": "100"
   }
 }
