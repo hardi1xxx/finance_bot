@@ -1,39 +1,37 @@
 import json
 import os
+import pandas as pd
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-  def __init__(self):
+
+class GoogleSheetsManager:
+    def __init__(self):
         self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
         self.sheet_name = os.getenv('SHEET_NAME', 'Pengeluaran+pemasukan')
         
-        # Railway/Google Cloud Run compatible
+        # Railway / Cloud Run
         creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+
         if creds_json:
-            # Railway environment variable
             creds_info = json.loads(creds_json)
-            scopes = ['https://www.googleapis.com/auth/spreadsheets']
             creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         else:
-            # Local development
             creds_path = os.getenv('GOOGLE_SHEETS_CREDENTIALS_PATH')
-            scopes = ['https://www.googleapis.com/auth/spreadsheets']
             creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
-        
+
         self.service = build('sheets', 'v4', credentials=creds)
 
     def append_data(self, data: dict):
-        """Append new transaction to sheet"""
-        values = [
-            [
-                data['date'],
-                data['type'],  # 'Pemasukan' or 'Pengeluaran'
-                data['amount'],
-                data['description'],
-                data['category'],
-                data['source']  # 'manual' or 'struk'
-            ]
-        ]
+        values = [[
+            data['date'],
+            data['type'],
+            data['amount'],
+            data['description'],
+            data['category'],
+            data['source']
+        ]]
         
         body = {'values': values}
         range_name = f"{self.sheet_name}!A:F"
@@ -46,7 +44,6 @@ from googleapiclient.discovery import build
         ).execute()
 
     def get_summary(self, days: int = 30) -> dict:
-        """Get financial summary"""
         range_name = f"{self.sheet_name}!A:F"
         result = self.service.spreadsheets().values().get(
             spreadsheetId=self.spreadsheet_id,
