@@ -1,17 +1,25 @@
-from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
-import pandas as pd
-from datetime import datetime
+import json
 import os
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
-class GoogleSheetsManager:
-    def __init__(self):
-        credentials_path = os.getenv('GOOGLE_SHEETS_CREDENTIALS_PATH')
+  def __init__(self):
         self.spreadsheet_id = os.getenv('SPREADSHEET_ID')
         self.sheet_name = os.getenv('SHEET_NAME', 'Pengeluaran+pemasukan')
         
-        scopes = ['https://www.googleapis.com/auth/spreadsheets']
-        creds = Credentials.from_service_account_file(credentials_path, scopes=scopes)
+        # Railway/Google Cloud Run compatible
+        creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+        if creds_json:
+            # Railway environment variable
+            creds_info = json.loads(creds_json)
+            scopes = ['https://www.googleapis.com/auth/spreadsheets']
+            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        else:
+            # Local development
+            creds_path = os.getenv('GOOGLE_SHEETS_CREDENTIALS_PATH')
+            scopes = ['https://www.googleapis.com/auth/spreadsheets']
+            creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
+        
         self.service = build('sheets', 'v4', credentials=creds)
 
     def append_data(self, data: dict):
