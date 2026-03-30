@@ -9,8 +9,8 @@ class OCRProcessor:
 
         text = pytesseract.image_to_string(image)
 
-        # cari angka
-        amounts = re.findall(r'\d+[.,]?\d+', text)
+        # cari angka (format Indonesia: titik sebagai pemisah ribuan, koma untuk desimal)
+        amounts = re.findall(r'\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:,\d+)?', text)
 
         amounts = [float(a.replace('.', '').replace(',', '.')) for a in amounts]
 
