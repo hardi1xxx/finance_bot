@@ -4,6 +4,7 @@ from urllib.parse import unquote_plus
 import pandas as pd
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 
 class GoogleSheetsManager:
@@ -15,12 +16,14 @@ class GoogleSheetsManager:
             raise ValueError("SPREADSHEET_ID belum diset!")
 
         scopes = ['https://www.googleapis.com/auth/spreadsheets']
-
         creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
 
         if creds_json:
-            creds_info = json.loads(creds_json)
-            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+            try:
+                creds_info = json.loads(creds_json)
+                creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+            except (json.JSONDecodeError, ValueError) as e:
+                raise ValueError(f"GOOGLE_CREDENTIALS_JSON invalid: {e}")
         else:
             raise ValueError("GOOGLE_CREDENTIALS_JSON belum diset!")
 
@@ -39,33 +42,45 @@ class GoogleSheetsManager:
         try:
             self.service.spreadsheets().values().append(
                 spreadsheetId=self.spreadsheet_id,
-                range=f"{self.sheet_name}!A2:F",
+                range=f"{self.sheet_name}!A:F",  # Mulai dari A1, append akan otomatis
                 valueInputOption='RAW',
+                insertDataOption='INSERT_ROWS',
                 body={'values': values}
             ).execute()
-        except Exception as e:
+        except HttpError as e:
             raise RuntimeError(f"Google Sheets API error saat append data: {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error saat append data: {e}") from e
 
     def get_summary(self):
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{self.sheet_name}!A1:F"
-        ).execute()
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{self.sheet_name}!A1:F1000"  # Limit range untuk performa
+            ).execute()
 
-        rows = result.get('values', [])
+            rows = result.get('values', [])
+            if len(rows) < 1:
+                return dict(total_income=0, total_expense=0, balance=0, total_transactions=0)
 
-        if len(rows) < 2:
-            return dict(total_income=0, total_expense=0, balance=0, total_transactions=0)
+            # Pastikan header ada
+            if len(rows) < 2:
+                return dict(total_income=0, total_expense=0, balance=0, total_transactions=0)
 
-        df = pd.DataFrame(rows[1:], columns=rows[0])
-        df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+            df = pd.DataFrame(rows[1:], columns=rows[0])
+            
+            # Convert amount ke numeric dengan handling error
+            df['amount'] = pd.to_numeric(df['amount'], errors='coerce')
+            df = df.dropna(subset=['amount', 'type'])  # Hapus row yang amount-nya invalid
 
-        income = df[df['type'] == 'Pemasukan']['amount'].sum()
-        expense = df[df['type'] == 'Pengeluaran']['amount'].sum()
+            income = df[df['type'] == 'Pemasukan']['amount'].sum() or 0
+            expense = df[df['type'] == 'Pengeluaran']['amount'].sum() or 0
 
-        return {
-            'total_income': float(income or 0),
-            'total_expense': float(expense or 0),
-            'balance': float((income - expense) or 0),
-            'total_transactions': len(df)
-        }
+            return {
+                'total_income': float(income),
+                'total_expense': float(expense),
+                'balance': float(income - expense),
+                'total_transactions': len(df)
+            }
+        except Exception as e:
+            raise RuntimeError(f"Error saat get summary: {e}") from e
