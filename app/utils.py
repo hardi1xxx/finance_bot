@@ -1,11 +1,37 @@
-def categorize_transaction(desc: str) -> str:
-    desc = desc.lower()
+import re
 
-    if any(x in desc for x in ['makan', 'kopi', 'resto']):
-        return 'Makanan'
-    elif any(x in desc for x in ['bensin', 'transport']):
-        return 'Transport'
-    elif any(x in desc for x in ['gaji', 'salary']):
-        return 'Pemasukan'
+def parse_transaction(text: str):
+    text_lower = text.lower()
+
+    # ===== AMOUNT =====
+    if 'k' in text_lower or 'rb' in text_lower:
+        num = re.sub(r'[^\d]', '', text_lower)
+        amount = float(num) * 1000
+    elif 'jt' in text_lower:
+        num = re.sub(r'[^\d]', '', text_lower)
+        amount = float(num) * 1_000_000
     else:
-        return 'Lainnya'
+        cleaned = re.sub(r'[^\d,\.]', '', text_lower)
+        cleaned = cleaned.replace('.', '').replace(',', '.')
+        amount = float(cleaned)
+
+    # ===== TYPE =====
+    if any(x in text_lower for x in ['gaji', 'income', 'masuk']):
+        trans_type = 'Pemasukan'
+    else:
+        trans_type = 'Pengeluaran'
+
+    # ===== CATEGORY =====
+    if any(x in text_lower for x in ['makan', 'bakso', 'kopi']):
+        category = 'Makanan'
+    elif any(x in text_lower for x in ['bensin', 'gojek']):
+        category = 'Transport'
+    else:
+        category = 'Lainnya'
+
+    return {
+        "amount": amount,
+        "type": trans_type,
+        "category": category,
+        "description": text
+    }
