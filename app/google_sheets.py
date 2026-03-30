@@ -36,17 +36,20 @@ class GoogleSheetsManager:
             data['source']
         ]]
 
-        self.service.spreadsheets().values().append(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{self.sheet_name}!A:F",
-            valueInputOption='RAW',
-            body={'values': values}
-        ).execute()
+        try:
+            self.service.spreadsheets().values().append(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{self.sheet_name}!A2:F",
+                valueInputOption='RAW',
+                body={'values': values}
+            ).execute()
+        except Exception as e:
+            raise RuntimeError(f"Google Sheets API error saat append data: {e}") from e
 
     def get_summary(self):
         result = self.service.spreadsheets().values().get(
             spreadsheetId=self.spreadsheet_id,
-            range=f"{self.sheet_name}!A:F"
+            range=f"{self.sheet_name}!A1:F"
         ).execute()
 
         rows = result.get('values', [])
