@@ -124,14 +124,12 @@ class GoogleSheetsManager:
 
             headers = [h.strip().lower() for h in rows[0]]
             transactions = []
-
             for row in rows[1:]:
                 if len(row) < 3:
                     continue
-
                 try:
-                amount_idx = headers.index('nominal')
-                type_idx = headers.index('jenis')
+                    amount_idx = headers.index('nominal')
+                    type_idx = headers.index('jenis')
 
                     amount = float(str(row[amount_idx]).replace(',', '').replace('Rp', '').strip())
                     trans_type = str(row[type_idx]).lower()
@@ -140,8 +138,8 @@ class GoogleSheetsManager:
                         'amount': amount,
                         'type': trans_type
                     })
-
-                except:
+                except Exception as e:
+                    logger.warning(f"Skip row error: {e}")
                     continue
 
             income = sum(t['amount'] for t in transactions if 'pemasukan' in t['type'])

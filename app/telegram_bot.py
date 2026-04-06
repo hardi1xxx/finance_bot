@@ -62,7 +62,7 @@ class FinanceBot:
             s = self.sheets.get_summary()
             text = (
                 f"📊 *Summary Keuangan*\n\n"
-                f"💰 *Pemasukan:* Rp {s['total_expense']:,.0f}\n"
+                f"💰 *Pemasukan:* Rp {s['total_income']:,.0f}\n"
                 f"💸 *Pengeluaran:* Rp {s['total_expense']:,.0f}\n"
                 f"💳 *Saldo:* Rp {s['balance']:,.0f}\n"
                 f"📈 *Total Transaksi:* {s['total_transactions']}"
