@@ -122,7 +122,7 @@ class GoogleSheetsManager:
                     'total_transactions': 0
                 }
 
-            headers = [h.lower() for h in rows[0]]
+            headers = [h.strip().lower() for h in rows[0]]
             transactions = []
 
             for row in rows[1:]:
@@ -130,10 +130,10 @@ class GoogleSheetsManager:
                     continue
 
                 try:
-                    amount_idx = headers.index('amount')
-                    type_idx = headers.index('type')
+                amount_idx = headers.index('nominal')
+                type_idx = headers.index('jenis')
 
-                    amount = float(str(row[amount_idx]).replace(',', ''))
+                    amount = float(str(row[amount_idx]).replace(',', '').replace('Rp', '').strip())
                     trans_type = str(row[type_idx]).lower()
 
                     transactions.append({
