@@ -27,25 +27,29 @@ class GoogleSheetsManager:
         
         # Fix multiline JSON untuk Rainway
         creds_json_raw = os.getenv('GOOGLE_CREDENTIALS_JSON')
+
         if not creds_json_raw:
-            raise ValueError("GOOGLE_CREDENTIALS_JSON kosong! Set di Rainway dashboard")
-        
+            raise ValueError("GOOGLE_CREDENTIALS_JSON kosong! Set di Railway dashboard")
+
         try:
-            # Fix escaped newlines
-            creds_json = creds_json_raw.replace('\\\\n', '\n').replace('\\n', '\n')
-            creds_info = json.loads(creds_json)
-            
-            # Validate required fields
-            required = ['client_email', 'private_key']
-            missing = [k for k in required if k not in creds_info]
-            if missing:
-                raise ValueError(f"Missing credentials: {missing}")
-                
-            creds = Credentials.from_service_account_info(creds_info, scopes=self.scopes)
-            logger.info(f"✅ Auth OK - {creds_info.get('client_email')}")
-        except Exception as e:
-            logger.error(f"❌ Auth failed: {e}")
-            raise ValueError(f"Credentials invalid: {str(e)[:100]}...")
+            # Parse dulu TANPA ubah apapun
+            creds_info = json.loads(creds_json_raw)
+
+            # Baru fix private_key
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+
+        # Validate required fields
+        required = ['client_email', 'private_key']
+        missing = [k for k in required if k not in creds_info]
+        if missing:
+            raise ValueError(f"Missing credentials: {missing}")
+
+        creds = Credentials.from_service_account_info(creds_info, scopes=self.scopes)
+        logger.info(f"✅ Auth OK - {creds_info.get('client_email')}")
+
+except Exception as e:
+    logger.error(f"❌ Auth failed: {e}")
+    raise ValueError(f"Credentials invalid: {str(e)[:100]}...")
 
         # Build dengan retry
         for attempt in range(3):
