@@ -42,7 +42,8 @@ def dashboard():
     return render_template(
         "index.html",
         summary=data,
-        transactions=json.dumps(transactions),
+        transactions=transactions, #❗ HAPUS json.dumps
+        transactions_json=json.dumps(transactions), # tambahan
         income=data["total_income"],
         expense=data["total_expense"]
     )

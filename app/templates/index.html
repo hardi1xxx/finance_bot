@@ -1,76 +1,202 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
+    <meta charset="UTF-8">
     <title>Dashboard Keuangan</title>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f5f7fb;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .summary {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .box {
+            flex: 1;
+            min-width: 200px;
+            padding: 20px;
+            border-radius: 12px;
+            color: white;
+        }
+
+        .income { background: #4CAF50; }
+        .expense { background: #f44336; }
+        .balance { background: #2196F3; }
+
+        .box h3 {
+            margin: 0;
+        }
+
+        .box p {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #fafafa;
+        }
+
+        .income-text { color: green; }
+        .expense-text { color: red; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media(max-width: 768px){
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
+
 <body>
 
-<h1>📊 Dashboard Keuangan</h1>
+<div class="container">
 
-<!-- SUMMARY -->
-<h2>Ringkasan</h2>
-<p>💰 Pemasukan: Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
-<p>💸 Pengeluaran: Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
-<p>💳 Saldo: Rp {{ "{:,.0f}".format(summary.balance) }}</p>
+    <h1>📊 Dashboard Keuangan</h1>
 
-<hr>
+    <!-- SUMMARY -->
+    <div class="summary">
+        <div class="box income">
+            <h3>Pemasukan</h3>
+            <p>Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
+        </div>
 
-<!-- CHART -->
-<h2>📊 Grafik Keuangan</h2>
-<canvas id="financeChart"></canvas>
+        <div class="box expense">
+            <h3>Pengeluaran</h3>
+            <p>Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
+        </div>
+
+        <div class="box balance">
+            <h3>Saldo</h3>
+            <p>Rp {{ "{:,.0f}".format(summary.balance) }}</p>
+        </div>
+    </div>
+
+    <!-- CHART -->
+    <div class="card">
+        <h2>📈 Grafik Keuangan</h2>
+        <canvas id="financeChart"></canvas>
+    </div>
+
+    <!-- LIST -->
+    <div class="grid">
+
+        <!-- PEMASUKAN -->
+        <div class="card">
+            <h2>💰 Pemasukan</h2>
+            <table>
+                <tr>
+                    <th>Tanggal</th>
+                    <th>Nominal</th>
+                </tr>
+
+                {% for t in transactions %}
+                    {% if "Pemasukan" in t.type %}
+                    <tr>
+                        <td>{{ t.date }}</td>
+                        <td class="income-text">
+                            Rp {{ "{:,.0f}".format(t.amount) }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+            </table>
+        </div>
+
+        <!-- PENGELUARAN -->
+        <div class="card">
+            <h2>💸 Pengeluaran</h2>
+            <table>
+                <tr>
+                    <th>Tanggal</th>
+                    <th>Nominal</th>
+                </tr>
+
+                {% for t in transactions %}
+                    {% if "Pengeluaran" in t.type %}
+                    <tr>
+                        <td>{{ t.date }}</td>
+                        <td class="expense-text">
+                            Rp {{ "{:,.0f}".format(t.amount) }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+            </table>
+        </div>
+
+    </div>
+
+</div>
 
 <script>
-const income = {{ summary.total_income }};
-const expense = {{ summary.total_expense }};
+const data = JSON.parse('{{ transactions_json | safe }}');
+
+let income = 0;
+let expense = 0;
+
+data.forEach(d => {
+    if (d.type.toLowerCase().includes("pemasukan")) {
+        income += d.amount;
+    } else {
+        expense += d.amount;
+    }
+});
 
 const ctx = document.getElementById('financeChart');
 
 new Chart(ctx, {
-    type: 'bar',
+    type: 'doughnut',
     data: {
         labels: ['Pemasukan', 'Pengeluaran'],
         datasets: [{
-            label: 'Total',
-            data: [income, expense]
+            data: [income, expense],
+            backgroundColor: ['#4CAF50', '#f44336']
         }]
     }
 });
 </script>
-
-<hr>
-
-<!-- PEMASUKAN -->
-<h2>💰 Pemasukan</h2>
-<table border="1" cellpadding="8">
-    <tr>
-        <th>Tanggal</th>
-        <th>Nominal</th>
-    </tr>
-    {% for t in income_list %}
-    <tr>
-        <td>{{ t.date }}</td>
-        <td>Rp {{ "{:,.0f}".format(t.amount) }}</td>
-    </tr>
-    {% endfor %}
-</table>
-
-<br>
-
-<!-- PENGELUARAN -->
-<h2>💸 Pengeluaran</h2>
-<table border="1" cellpadding="8">
-    <tr>
-        <th>Tanggal</th>
-        <th>Nominal</th>
-    </tr>
-    {% for t in expense_list %}
-    <tr>
-        <td>{{ t.date }}</td>
-        <td>Rp {{ "{:,.0f}".format(t.amount) }}</td>
-    </tr>
-    {% endfor %}
-</table>
 
 </body>
 </html>
