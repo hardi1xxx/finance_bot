@@ -1,17 +1,41 @@
 import os
 from flask import Flask, render_template
+import json
 from app.google_sheets import GoogleSheetsManager
 
 app = Flask(__name__)
-sheets = GoogleSheetsManager()
 
 @app.route("/")
 def dashboard():
-    s = sheets.get_summary()
+    sheets = GoogleSheetsManager()
+    data = sheets.get_summary()
+
+    # 🔥 Tambahan: ambil semua data (buat chart)
+    result = sheets.service.spreadsheets().values().get(
+        spreadsheetId=sheets.spreadsheet_id,
+        range=f"{sheets.sheet_name}!A2:F"
+    ).execute()
+
+    rows = result.get("values", [])
+
+    transactions = []
+    for r in rows:
+        try:
+            transactions.append({
+                "date": r[0],
+                "type": r[1],
+                "amount": float(r[2])
+            })
+        except:
+            continue
 
     return render_template(
-        "index.html",
-        income=s['total_income'],
-        expense=s['total_expense'],
-        balance=s['balance']
+    "index.html",
+    summary=data,
+    transactions=json.dumps(transactions),
+    income=data["total_income"],
+    expense=data["total_expense"]
+)
+        
+        
     )

@@ -1,5 +1,30 @@
-<h1>📊 Dashboard</h1>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<p>Pemasukan: Rp {{ income }}</p>
-<p>Pengeluaran: Rp {{ expense }}</p>
-<p>Saldo: Rp {{ balance }}</p>
+<h1>📊 Dashboard</h1>
+<h2>📊 Grafik Keuangan</h2>
+<canvas id="financeChart"></canvas>
+<p>Pemasukan: Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
+<p>Pengeluaran: Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
+<p>Saldo: Rp {{ "{:,.0f}".format(summary.balance) }}</p>
+
+<script>
+const data = JSON.parse('{{ transactions | safe }}');
+
+// pisahin data
+const income = {{ summary.total_income }};
+const expense = {{ summary.total_expense }};
+
+// buat chart
+const ctx = document.getElementById('financeChart');
+
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['Pemasukan', 'Pengeluaran'],
+        datasets: [{
+            label: 'Total',
+            data: [income, expense]
+        }]
+    }
+});
+</script>
