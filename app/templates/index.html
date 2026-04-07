@@ -95,32 +95,36 @@
 
     <h1>📊 Dashboard Keuangan</h1>
 
-    <!-- SUMMARY -->
-    <div class="summary">
-        <div class="box income">
-            <h3>Pemasukan</h3>
-            <p>Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
-        </div>
+<!-- FILTER BULAN -->
+<form method="get" class="card" style="display:flex;gap:10px;align-items:center;">
+    <label>Pilih Bulan:</label>
+    <input type="month" name="month" value="{{ selected_month }}">
+    <button type="submit">Filter</button>
+</form>
 
-        <div class="box expense">
-            <h3>Pengeluaran</h3>
-            <p>Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
-        </div>
-
-        <div class="box balance">
-            <h3>Saldo</h3>
-            <p>Rp {{ "{:,.0f}".format(summary.balance) }}</p>
-        </div>
+<!-- SUMMARY -->
+<div class="summary">
+    <div class="box income">
+        <h3>Pemasukan</h3>
+        <p>Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
     </div>
 
-    <!-- CHART -->
-    <div class="card">
-        <h2>📈 Grafik Keuangan</h2>
-        <canvas id="financeChart"></canvas>
+    <div class="box expense">
+        <h3>Pengeluaran</h3>
+        <p>Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
     </div>
 
-    <!-- LIST -->
-    <div class="grid">
+    <div class="box balance">
+        <h3>Saldo</h3>
+        <p>Rp {{ "{:,.0f}".format(summary.balance) }}</p>
+    </div>
+</div>
+
+<!-- LINE CHART -->
+<div class="card">
+    <h2>📈 Grafik Harian</h2>
+    <canvas id="financeChart"></canvas>
+</div>
 
         <!-- PEMASUKAN -->
         <div class="card">
@@ -173,27 +177,47 @@
 <script>
 const data = JSON.parse('{{ transactions_json | safe }}');
 
-let income = 0;
-let expense = 0;
+// grouping per tanggal
+const grouped = {};
 
 data.forEach(d => {
+    const date = d.date.split(" ")[0];
+
+    if (!grouped[date]) {
+        grouped[date] = { income: 0, expense: 0 };
+    }
+
     if (d.type.toLowerCase().includes("pemasukan")) {
-        income += d.amount;
+        grouped[date].income += d.amount;
     } else {
-        expense += d.amount;
+        grouped[date].expense += d.amount;
     }
 });
+
+const labels = Object.keys(grouped);
+const incomeData = labels.map(d => grouped[d].income);
+const expenseData = labels.map(d => grouped[d].expense);
 
 const ctx = document.getElementById('financeChart');
 
 new Chart(ctx, {
-    type: 'doughnut',
+    type: 'line',
     data: {
-        labels: ['Pemasukan', 'Pengeluaran'],
-        datasets: [{
-            data: [income, expense],
-            backgroundColor: ['#4CAF50', '#f44336']
-        }]
+        labels: labels,
+        datasets: [
+            {
+                label: 'Pemasukan',
+                data: incomeData,
+                borderColor: '#4CAF50',
+                fill: false
+            },
+            {
+                label: 'Pengeluaran',
+                data: expenseData,
+                borderColor: '#f44336',
+                fill: false
+            }
+        ]
     }
 });
 </script>

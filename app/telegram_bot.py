@@ -29,13 +29,14 @@ class FinanceBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-            "💰 *Bot Keuangan AI*\n\n"
-            "📝 Cara pakai:\n"
-            "• makan 25rb\n"
-            "• gaji 3jt\n"
-            "• Kirim foto struk 📸",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
+        "💰 *Bot Keuangan AI*\n\n"
+        "📝 Cara pakai:\n"
+        "• makan 25rb\n"
+        "• gaji 3jt\n"
+        "• Kirim foto struk 📸\n\n"
+        "🌐 Dashboard:\n"
+        "https://financebot-production-a928.up.railway.app",
+        parse_mode='Markdown'
         )
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
