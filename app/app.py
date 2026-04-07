@@ -1,6 +1,6 @@
 import os
-from flask import Flask, render_template
 import json
+from flask import Flask, render_template
 from app.google_sheets import GoogleSheetsManager
 
 app = Flask(__name__)
@@ -30,12 +30,12 @@ def dashboard():
             continue
 
     return render_template(
-    "index.html",
-    summary=data,
-    transactions=json.dumps(transactions),
-    income=data["total_income"],
-    expense=data["total_expense"]
-)
-        
-        
+        "index.html",
+        summary=data,
+        transactions=json.dumps(transactions),
+        income=data["total_income"],
+        expense=data["total_expense"]
     )
+        
+        
+    
