@@ -36,8 +36,10 @@ def run_web():
     flask_app.run(host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    # jalanin bot di background
-    threading.Thread(target=run_bot).start()
+    # 🔥 Web di background thread
+    threading.Thread(target=run_web, daemon=True).start()
 
-    # jalanin web (utama Railway)
-    run_web()
+    # 🔥 Bot di MAIN THREAD (WAJIB)
+    bot = create_app()
+    print("🚀 Bot started!")
+    bot.run_polling(drop_pending_updates=True)
