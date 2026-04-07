@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import datetime
 from flask import request
 from flask import Flask, render_template
 from app.google_sheets import GoogleSheetsManager
@@ -24,23 +25,29 @@ def dashboard():
 
     transactions = []
 
-    for r in rows:
-        try:
-            date = r[0]
-            amount = float(r[2])
+for r in rows:
+    try:
+        raw_date = r[0]
+        amount = float(r[2])
 
-            # filter bulan
-            if selected_month:
-                if selected_month not in date:
-                    continue
+        # ubah string ke datetime
+        date_obj = datetime.strptime(raw_date.split(" ")[0], "%d/%m/%Y")
 
-            transactions.append({
-                "date": date,
-                "type": r[1],
-                "amount": amount
-            })
-        except:
-            continue
+        # filter bulan
+        if selected_month:
+            filter_date = datetime.strptime(selected_month, "%Y-%m")
+
+            if date_obj.year != filter_date.year or date_obj.month != filter_date.month:
+                continue
+
+        transactions.append({
+            "date": raw_date,
+            "type": r[1],
+            "amount": amount
+        })
+
+    except:
+        continue
 
     return render_template(
         "index.html",
