@@ -2,6 +2,7 @@ import logging
 import sys
 import threading
 import os
+import asyncio
 
 from app.telegram_bot import create_app
 from app.app import app as flask_app  # ← dashboard
@@ -18,9 +19,14 @@ logging.basicConfig(
 
 def run_bot():
     try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         bot = create_app()
         print("🚀 Bot started!")
+
         bot.run_polling(drop_pending_updates=True)
+
     except Exception as e:
         logging.error(f"Bot error: {e}", exc_info=True)
 
