@@ -1,109 +1,76 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Dashboard Keuangan</title>
-
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-
-        h1 {
-            margin-bottom: 10px;
-        }
-
-        .card-container {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            flex: 1;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-
-        .income { color: green; }
-        .expense { color: red; }
-        .balance { color: blue; }
-
-        canvas {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            max-width: 600px;
-        }
-    </style>
 </head>
-
 <body>
 
-    <h1>📊 Dashboard Keuangan</h1>
+<h1>📊 Dashboard Keuangan</h1>
 
-    <!-- 🔥 SUMMARY -->
-    <div class="card-container">
-        <div class="card">
-            <h3>💰 Pemasukan</h3>
-            <p class="income">
-                Rp {{ "{:,.0f}".format(summary.total_income) }}
-            </p>
-        </div>
+<!-- SUMMARY -->
+<h2>Ringkasan</h2>
+<p>💰 Pemasukan: Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
+<p>💸 Pengeluaran: Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
+<p>💳 Saldo: Rp {{ "{:,.0f}".format(summary.balance) }}</p>
 
-        <div class="card">
-            <h3>💸 Pengeluaran</h3>
-            <p class="expense">
-                Rp {{ "{:,.0f}".format(summary.total_expense) }}
-            </p>
-        </div>
+<hr>
 
-        <div class="card">
-            <h3>💳 Saldo</h3>
-            <p class="balance">
-                Rp {{ "{:,.0f}".format(summary.balance) }}
-            </p>
-        </div>
-    </div>
+<!-- CHART -->
+<h2>📊 Grafik Keuangan</h2>
+<canvas id="financeChart"></canvas>
 
-    <!-- 📊 CHART -->
-    <h2>📊 Grafik Keuangan</h2>
-    <canvas id="financeChart"></canvas>
+<script>
+const income = {{ summary.total_income }};
+const expense = {{ summary.total_expense }};
 
-    <script>
-        const income = {{ summary.total_income | default(0) }};
-        const expense = {{ summary.total_expense | default(0) }};
+const ctx = document.getElementById('financeChart');
 
-        const ctx = document.getElementById('financeChart');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['Pemasukan', 'Pengeluaran'],
+        datasets: [{
+            label: 'Total',
+            data: [income, expense]
+        }]
+    }
+});
+</script>
 
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Pemasukan', 'Pengeluaran'],
-                datasets: [{
-                    label: 'Total',
-                    data: [income, expense],
-                    backgroundColor: ['green', 'red']
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
-            }
-        });
-    </script>
+<hr>
+
+<!-- PEMASUKAN -->
+<h2>💰 Pemasukan</h2>
+<table border="1" cellpadding="8">
+    <tr>
+        <th>Tanggal</th>
+        <th>Nominal</th>
+    </tr>
+    {% for t in income_list %}
+    <tr>
+        <td>{{ t.date }}</td>
+        <td>Rp {{ "{:,.0f}".format(t.amount) }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<br>
+
+<!-- PENGELUARAN -->
+<h2>💸 Pengeluaran</h2>
+<table border="1" cellpadding="8">
+    <tr>
+        <th>Tanggal</th>
+        <th>Nominal</th>
+    </tr>
+    {% for t in expense_list %}
+    <tr>
+        <td>{{ t.date }}</td>
+        <td>Rp {{ "{:,.0f}".format(t.amount) }}</td>
+    </tr>
+    {% endfor %}
+</table>
 
 </body>
 </html>

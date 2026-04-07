@@ -29,6 +29,16 @@ def dashboard():
         except:
             continue
 
+    # pisahkan data
+    income_list = []
+    expense_list = []
+
+    for t in transactions:
+        if "pemasukan" in t["type"].lower():
+            income_list.append(t)
+        else:
+            expense_list.append(t)
+
     return render_template(
         "index.html",
         summary=data,
