@@ -9,46 +9,68 @@ app = Flask(__name__)
 @app.route("/")
 def dashboard():
     sheets = GoogleSheetsManager()
-    data = sheets.get_summary()
 
-    selected_month = request.args.get("month")
+    # ✅ Default ke bulan ini kalau tidak ada parameter
+    selected_month = request.args.get("month") or datetime.now().strftime("%Y-%m")
 
+    # ✅ Ambil semua baris data dari sheet (tanpa filter di sini)
     result = sheets.service.spreadsheets().values().get(
         spreadsheetId=sheets.spreadsheet_id,
         range=f"{sheets.sheet_name}!A2:F"
     ).execute()
 
     rows = result.get("values", [])
-
     transactions = []
 
     for r in rows:
         try:
-            raw_date = r[0]
-            amount = float(r[2])
+            if len(r) < 3:
+                continue
 
-            date_obj = datetime.strptime(raw_date.split(" ")[0], "%d/%m/%Y")
+            raw_date = str(r[0]).strip()
+            raw_amount = str(r[2]).replace("Rp", "").replace(".", "").replace(",", "").strip()
+            amount = float(raw_amount) if raw_amount else 0
 
-            if selected_month:
-                filter_date = datetime.strptime(selected_month, "%Y-%m")
-                if date_obj.year != filter_date.year or date_obj.month != filter_date.month:
-                    continue
+            # ✅ Support format DD/MM/YYYY dan YYYY-MM-DD
+            date_clean = raw_date.split(" ")[0]
+            if "/" in date_clean:
+                date_obj = datetime.strptime(date_clean, "%d/%m/%Y")
+            else:
+                date_obj = datetime.strptime(date_clean, "%Y-%m-%d")
 
+            # ✅ Filter berdasarkan bulan yang dipilih
+            row_month = date_obj.strftime("%Y-%m")
+            if row_month != selected_month:
+                continue
+
+            # ✅ Simpan tanggal dalam format konsisten untuk JS (DD/MM/YYYY)
             transactions.append({
-                "date":        raw_date,
-                "type":        r[1],
+                "date":        date_obj.strftime("%d/%m/%Y"),
+                "date_sort":   date_obj.strftime("%Y-%m-%d"),  # untuk sorting di JS
+                "type":        str(r[1]).strip() if len(r) > 1 else "",
                 "amount":      amount,
-                "description": r[3].strip() if len(r) > 3 and r[3] else "",  # ← kolom D
-                "category":    r[4].strip() if len(r) > 4 and r[4] else "",  # ← kolom E
-                "source":      r[5].strip() if len(r) > 5 and r[5] else "",  # ← kolom F
+                "description": str(r[3]).strip() if len(r) > 3 and r[3] else "",
+                "category":    str(r[4]).strip() if len(r) > 4 and r[4] else "",
+                "source":      str(r[5]).strip() if len(r) > 5 and r[5] else "",
             })
 
-        except:
-            continue
+        except Exception as e:
+            continue  # skip baris rusak
+
+    # ✅ Hitung summary dari transactions yang sudah difilter (bukan dari get_summary)
+    total_income  = sum(t["amount"] for t in transactions if "pemasukan"   in t["type"].lower())
+    total_expense = sum(t["amount"] for t in transactions if "pengeluaran" in t["type"].lower())
+
+    summary = {
+        "total_income":       total_income,
+        "total_expense":      total_expense,
+        "balance":            total_income - total_expense,
+        "total_transactions": len(transactions),
+    }
 
     return render_template(
         "index.html",
-        summary=data,
+        summary=summary,
         transactions=transactions,
         transactions_json=json.dumps(transactions, ensure_ascii=False),
         selected_month=selected_month

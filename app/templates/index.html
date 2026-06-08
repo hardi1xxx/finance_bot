@@ -380,19 +380,22 @@
 
   const grouped = {};
   rawData.forEach(d => {
-    const date = d.date ? d.date.split(" ")[0] : '';
-    if (!date) return;
-    if (!grouped[date]) grouped[date] = { income: 0, expense: 0 };
+    // Gunakan date_sort (YYYY-MM-DD) untuk grouping & sorting yang benar
+    const dateKey  = d.date_sort || d.date || '';
+    const dateShow = d.date      || dateKey;
+    if (!dateKey) return;
+    if (!grouped[dateKey]) grouped[dateKey] = { income: 0, expense: 0, label: dateShow };
     if (d.type && d.type.toLowerCase().includes("pemasukan")) {
-      grouped[date].income += d.amount;
+      grouped[dateKey].income += d.amount;
     } else {
-      grouped[date].expense += d.amount;
+      grouped[dateKey].expense += d.amount;
     }
   });
 
-  const labels      = Object.keys(grouped).sort();
-  const incomeData  = labels.map(d => grouped[d].income);
-  const expenseData = labels.map(d => grouped[d].expense);
+  const sortedKeys  = Object.keys(grouped).sort();
+  const labels      = sortedKeys.map(k => grouped[k].label);
+  const incomeData  = sortedKeys.map(k => grouped[k].income);
+  const expenseData = sortedKeys.map(k => grouped[k].expense);
 
   new Chart(document.getElementById('financeChart'), {
     type: 'line',
