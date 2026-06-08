@@ -1,226 +1,460 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <title>Dashboard Keuangan</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Keuangan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    :root {
+      --bg: #f5f4f0;
+      --surface: #ffffff;
+      --surface-2: #f0efe9;
+      --border: rgba(0,0,0,0.08);
+      --border-md: rgba(0,0,0,0.14);
+      --text-primary: #1a1917;
+      --text-secondary: #6b6a65;
+      --text-tertiary: #a09f9a;
+      --green: #1D9E75;
+      --green-light: #E1F5EE;
+      --green-dark: #0F6E56;
+      --red: #E24B4A;
+      --red-light: #FCEBEB;
+      --red-dark: #A32D2D;
+      --blue: #378ADD;
+      --blue-light: #E6F1FB;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    }
 
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #f5f7fb;
-            margin: 0;
-            padding: 20px;
-        }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
 
-        .container {
-            max-width: 1100px;
-            margin: auto;
-        }
+    .page-wrap { max-width: 760px; margin: 0 auto; }
 
-        h1 {
-            margin-bottom: 20px;
-        }
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.5s ease both;
+    }
+    .header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+    .header p  { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
 
-        .card {
-            background: white;
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
+    .status-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--green-light); color: var(--green-dark);
+      font-size: 12px; font-weight: 500;
+      padding: 5px 10px; border-radius: 99px;
+    }
+    .status-badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); animation: pulse 2s ease infinite;
+    }
 
-        .summary {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
+    /* ── Filter ── */
+    .filter-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 0.9rem 1.2rem;
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow);
+      animation: fadeUp 0.5s 0.05s ease both;
+      flex-wrap: wrap;
+    }
+    .filter-card label { font-size: 13px; color: var(--text-secondary); }
+    .filter-card input[type="month"] {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      border: 0.5px solid var(--border-md);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      background: var(--surface-2);
+      color: var(--text-primary);
+      outline: none;
+    }
+    .filter-card input[type="month"]:focus { border-color: var(--green); }
+    .btn-filter {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 500;
+      padding: 7px 16px;
+      background: var(--green); color: white;
+      border: none; border-radius: var(--radius-sm);
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-filter:hover { background: var(--green-dark); }
 
-        .box {
-            flex: 1;
-            min-width: 200px;
-            padding: 20px;
-            border-radius: 12px;
-            color: white;
-        }
+    /* ── Metric grid ── */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+      animation: fadeUp 0.5s 0.1s ease both;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.1rem 1.2rem;
+      box-shadow: var(--shadow);
+      transition: box-shadow 0.2s;
+    }
+    .metric-card:hover { box-shadow: var(--shadow-md); }
+    .metric-icon {
+      width: 34px; height: 34px;
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 12px; font-size: 17px;
+    }
+    .metric-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+    .metric-value { font-size: 20px; font-weight: 600; letter-spacing: -0.4px; }
+    .metric-sub   { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
 
-        .income { background: #4CAF50; }
-        .expense { background: #f44336; }
-        .balance { background: #2196F3; }
+    /* ── Balance card ── */
+    .balance-card {
+      background: var(--text-primary);
+      border-radius: var(--radius-lg);
+      padding: 1.3rem 1.4rem;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow-md);
+      animation: fadeUp 0.5s 0.15s ease both;
+    }
+    .balance-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .balance-label  { font-size: 12px; color: rgba(255,255,255,0.5); }
+    .balance-amount { font-size: 28px; font-weight: 600; color: #fff; letter-spacing: -0.6px; margin-top: 4px; }
+    .balance-icon {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: rgba(255,255,255,0.7);
+    }
+    .balance-bar-track {
+      height: 5px; background: rgba(255,255,255,0.12);
+      border-radius: 99px; overflow: hidden; margin-bottom: 8px;
+    }
+    .balance-bar-fill { height: 100%; border-radius: 99px; background: var(--green); transition: width 1s ease; }
+    .balance-bar-labels { display: flex; justify-content: space-between; }
+    .balance-bar-labels span { font-size: 11px; color: rgba(255,255,255,0.4); }
 
-        .box h3 {
-            margin: 0;
-        }
+    /* ── Chart card ── */
+    .card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.2rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 13px; font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 6px;
+    }
 
-        .box p {
-            font-size: 20px;
-            font-weight: bold;
-        }
+    /* ── Transaction table ── */
+    .tx-table { width: 100%; border-collapse: collapse; }
+    .tx-table th {
+      font-size: 11px; font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 6px 8px; text-align: left;
+      background: var(--surface-2);
+    }
+    .tx-table th:last-child { text-align: right; }
+    .tx-table td { padding: 9px 8px; font-size: 13px; border-bottom: 0.5px solid var(--border); }
+    .tx-table tr:last-child td { border-bottom: none; }
+    .tx-table tr:hover td { background: var(--surface-2); }
+    .tx-table .amount { font-family: 'DM Mono', monospace; font-weight: 500; text-align: right; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+    .badge {
+      font-size: 10px; padding: 3px 8px;
+      border-radius: 99px; font-weight: 500;
+    }
+    .badge-in  { background: var(--green-light); color: var(--green-dark); }
+    .badge-out { background: var(--red-light);   color: var(--red-dark); }
 
-        th, td {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-        }
+    /* ── Two col ── */
+    .two-col {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 10px;
+      animation: fadeUp 0.5s 0.2s ease both;
+    }
 
-        th {
-            background: #fafafa;
-        }
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
 
-        .income-text { color: green; }
-        .expense-text { color: red; }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        @media(max-width: 768px){
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    @media (max-width: 540px) {
+      .metric-grid  { grid-template-columns: 1fr 1fr; }
+      .two-col      { grid-template-columns: 1fr; }
+      .balance-amount { font-size: 22px; }
+    }
+  </style>
 </head>
-
 <body>
+<div class="page-wrap">
 
-<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>Laporan Keuangan</h1>
+      <p>Sinkronisasi via Google Sheets API</p>
+    </div>
+    <div style="text-align:right;">
+      <div class="status-badge"><span class="dot"></span> Terhubung</div>
+      <p style="font-size:11px; color:var(--text-tertiary); margin-top:5px;">
+        {{ selected_month }}
+      </p>
+    </div>
+  </div>
 
-    <h1>📊 Dashboard Keuangan</h1>
+  <!-- Filter Bulan -->
+  <form method="get" class="filter-card">
+    <i class="ti ti-calendar" style="font-size:16px; color:var(--text-secondary);"></i>
+    <label for="month">Pilih Bulan:</label>
+    <input type="month" id="month" name="month" value="{{ selected_month }}">
+    <button type="submit" class="btn-filter">
+      <i class="ti ti-filter" style="font-size:13px; vertical-align:-1px;"></i> Filter
+    </button>
+  </form>
 
-<!-- FILTER BULAN -->
-<form method="get" class="card" style="display:flex;gap:10px;align-items:center;">
-    <label>Pilih Bulan:</label>
-    <input type="month" name="month" value="{{ selected_month }}">
-    <button type="submit">Filter</button>
-</form>
+  <!-- Metric Cards -->
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-icon" style="background:var(--green-light); color:var(--green-dark);">
+        <i class="ti ti-trending-up"></i>
+      </div>
+      <p class="metric-label">Total Pemasukan</p>
+      <p class="metric-value" style="color:var(--green-dark);">
+        Rp {{ "{:,.0f}".format(summary.total_income) }}
+      </p>
+      <p class="metric-sub">Bulan {{ selected_month }}</p>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon" style="background:var(--red-light); color:var(--red-dark);">
+        <i class="ti ti-trending-down"></i>
+      </div>
+      <p class="metric-label">Total Pengeluaran</p>
+      <p class="metric-value" style="color:var(--red-dark);">
+        Rp {{ "{:,.0f}".format(summary.total_expense) }}
+      </p>
+      <p class="metric-sub">Bulan {{ selected_month }}</p>
+    </div>
+  </div>
 
-<!-- SUMMARY -->
-<div class="summary">
-    <div class="box income">
-        <h3>Pemasukan</h3>
-        <p>Rp {{ "{:,.0f}".format(summary.total_income) }}</p>
+  <!-- Balance Card -->
+  <div class="balance-card">
+    <div class="balance-top">
+      <div>
+        <p class="balance-label">Saldo Bersih</p>
+        <p class="balance-amount">Rp {{ "{:,.0f}".format(summary.balance) }}</p>
+      </div>
+      <div class="balance-icon">
+        <i class="ti ti-wallet"></i>
+      </div>
+    </div>
+    <div class="balance-bar-track">
+      <div class="balance-bar-fill" id="balanceBar"></div>
+    </div>
+    <div class="balance-bar-labels">
+      <span>Pengeluaran</span>
+      <span id="balancePct">—</span>
+      <span>Pemasukan</span>
+    </div>
+  </div>
+
+  <!-- Grafik Harian -->
+  <div class="card" style="animation: fadeUp 0.5s 0.2s ease both;">
+    <p class="card-title">
+      <i class="ti ti-chart-line" style="font-size:14px;"></i> Grafik Harian
+    </p>
+    <canvas id="financeChart" height="100"></canvas>
+  </div>
+
+  <!-- Tabel Pemasukan & Pengeluaran -->
+  <div class="two-col">
+
+    <div class="card">
+      <p class="card-title">
+        <i class="ti ti-arrow-down" style="font-size:14px; color:var(--green);"></i> Pemasukan
+      </p>
+      <table class="tx-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Keterangan</th>
+            <th>Nominal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+            {% if "Pemasukan" in t.type %}
+            <tr>
+              <td style="color:var(--text-tertiary); white-space:nowrap;">{{ t.date }}</td>
+              <td style="color:var(--text-secondary); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                {{ t.description if t.description else '—' }}
+              </td>
+              <td class="amount" style="color:var(--green-dark);">
+                +Rp {{ "{:,.0f}".format(t.amount) }}
+              </td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
-    <div class="box expense">
-        <h3>Pengeluaran</h3>
-        <p>Rp {{ "{:,.0f}".format(summary.total_expense) }}</p>
+    <div class="card">
+      <p class="card-title">
+        <i class="ti ti-arrow-up" style="font-size:14px; color:var(--red);"></i> Pengeluaran
+      </p>
+      <table class="tx-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Keterangan</th>
+            <th>Nominal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in transactions %}
+            {% if "Pengeluaran" in t.type %}
+            <tr>
+              <td style="color:var(--text-tertiary); white-space:nowrap;">{{ t.date }}</td>
+              <td style="color:var(--text-secondary); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                {{ t.description if t.description else '—' }}
+              </td>
+              <td class="amount" style="color:var(--red-dark);">
+                -Rp {{ "{:,.0f}".format(t.amount) }}
+              </td>
+            </tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
-    <div class="box balance">
-        <h3>Saldo</h3>
-        <p>Rp {{ "{:,.0f}".format(summary.balance) }}</p>
-    </div>
-</div>
-
-<!-- LINE CHART -->
-<div class="card">
-    <h2>📈 Grafik Harian</h2>
-    <canvas id="financeChart"></canvas>
-</div>
-
-        <!-- PEMASUKAN -->
-        <div class="card">
-            <h2>💰 Pemasukan</h2>
-            <table>
-                <tr>
-                    <th>Tanggal</th>
-                    <th>Nominal</th>
-                </tr>
-
-                {% for t in transactions %}
-                    {% if "Pemasukan" in t.type %}
-                    <tr>
-                        <td>{{ t.date }}</td>
-                        <td class="income-text">
-                            Rp {{ "{:,.0f}".format(t.amount) }}
-                        </td>
-                    </tr>
-                    {% endif %}
-                {% endfor %}
-            </table>
-        </div>
-
-        <!-- PENGELUARAN -->
-        <div class="card">
-            <h2>💸 Pengeluaran</h2>
-            <table>
-                <tr>
-                    <th>Tanggal</th>
-                    <th>Nominal</th>
-                </tr>
-
-                {% for t in transactions %}
-                    {% if "Pengeluaran" in t.type %}
-                    <tr>
-                        <td>{{ t.date }}</td>
-                        <td class="expense-text">
-                            Rp {{ "{:,.0f}".format(t.amount) }}
-                        </td>
-                    </tr>
-                    {% endif %}
-                {% endfor %}
-            </table>
-        </div>
-
-    </div>
+  </div>
 
 </div>
 
 <script>
-const data = JSON.parse('{{ transactions_json | safe }}');
+  // ── Balance bar ──
+  const income  = {{ summary.total_income }};
+  const expense = {{ summary.total_expense }};
+  const pct = income > 0 ? Math.round((income - expense) / income * 100) : 0;
+  const bar = document.getElementById('balanceBar');
+  bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  bar.style.background = (income - expense) >= 0 ? '#1D9E75' : '#E24B4A';
+  document.getElementById('balancePct').textContent = pct + '% efisiensi';
 
-// grouping per tanggal
-const grouped = {};
+  // ── Chart.js line chart ──
+  const rawData = JSON.parse('{{ transactions_json | safe }}');
 
-data.forEach(d => {
-    const date = d.date.split(" ")[0];
-
-    if (!grouped[date]) {
-        grouped[date] = { income: 0, expense: 0 };
-    }
-
-    if (d.type.toLowerCase().includes("pemasukan")) {
-        grouped[date].income += d.amount;
+  const grouped = {};
+  rawData.forEach(d => {
+    const date = d.date ? d.date.split(" ")[0] : '';
+    if (!date) return;
+    if (!grouped[date]) grouped[date] = { income: 0, expense: 0 };
+    if (d.type && d.type.toLowerCase().includes("pemasukan")) {
+      grouped[date].income += d.amount;
     } else {
-        grouped[date].expense += d.amount;
+      grouped[date].expense += d.amount;
     }
-});
+  });
 
-const labels = Object.keys(grouped);
-const incomeData = labels.map(d => grouped[d].income);
-const expenseData = labels.map(d => grouped[d].expense);
+  const labels      = Object.keys(grouped).sort();
+  const incomeData  = labels.map(d => grouped[d].income);
+  const expenseData = labels.map(d => grouped[d].expense);
 
-const ctx = document.getElementById('financeChart');
-
-new Chart(ctx, {
+  new Chart(document.getElementById('financeChart'), {
     type: 'line',
     data: {
-        labels: labels,
-        datasets: [
-            {
-                label: 'Pemasukan',
-                data: incomeData,
-                borderColor: '#4CAF50',
-                fill: false
-            },
-            {
-                label: 'Pengeluaran',
-                data: expenseData,
-                borderColor: '#f44336',
-                fill: false
-            }
-        ]
+      labels: labels,
+      datasets: [
+        {
+          label: 'Pemasukan',
+          data: incomeData,
+          borderColor: '#1D9E75',
+          backgroundColor: 'rgba(29,158,117,0.08)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#1D9E75',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: 'Pengeluaran',
+          data: expenseData,
+          borderColor: '#E24B4A',
+          backgroundColor: 'rgba(226,75,74,0.06)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#E24B4A',
+          tension: 0.4,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          labels: {
+            font: { family: "'DM Sans', sans-serif", size: 12 },
+            color: '#6b6a65',
+            boxWidth: 12, boxHeight: 12,
+            borderRadius: 4
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' Rp ' + ctx.parsed.y.toLocaleString('id-ID')
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { font: { family: "'DM Sans'", size: 11 }, color: '#a09f9a' }
+        },
+        y: {
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: {
+            font: { family: "'DM Mono'", size: 11 }, color: '#a09f9a',
+            callback: v => 'Rp ' + (v/1000).toLocaleString('id-ID') + 'k'
+          }
+        }
+      }
     }
-});
+  });
 </script>
-
 </body>
 </html>
