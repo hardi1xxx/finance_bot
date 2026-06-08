@@ -11,7 +11,6 @@ def dashboard():
     sheets = GoogleSheetsManager()
     data = sheets.get_summary()
 
-    # ambil parameter bulan
     selected_month = request.args.get("month")
 
     result = sheets.service.spreadsheets().values().get(
@@ -23,7 +22,6 @@ def dashboard():
 
     transactions = []
 
-    # ✅ LOOP HARUS DI DALAM FUNCTION
     for r in rows:
         try:
             raw_date = r[0]
@@ -31,27 +29,27 @@ def dashboard():
 
             date_obj = datetime.strptime(raw_date.split(" ")[0], "%d/%m/%Y")
 
-            # filter bulan
             if selected_month:
                 filter_date = datetime.strptime(selected_month, "%Y-%m")
-
                 if date_obj.year != filter_date.year or date_obj.month != filter_date.month:
                     continue
 
             transactions.append({
-                "date": raw_date,
-                "type": r[1],
-                "amount": amount
+                "date":        raw_date,
+                "type":        r[1],
+                "amount":      amount,
+                "description": r[3].strip() if len(r) > 3 and r[3] else "",  # ← kolom D
+                "category":    r[4].strip() if len(r) > 4 and r[4] else "",  # ← kolom E
+                "source":      r[5].strip() if len(r) > 5 and r[5] else "",  # ← kolom F
             })
 
         except:
             continue
 
-    # ✅ RETURN HARUS MASIH DI DALAM FUNCTION
     return render_template(
         "index.html",
         summary=data,
         transactions=transactions,
-        transactions_json=json.dumps(transactions),
+        transactions_json=json.dumps(transactions, ensure_ascii=False),
         selected_month=selected_month
     )
