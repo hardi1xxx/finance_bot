@@ -94,7 +94,9 @@ class GoogleSheetsManager:
             amount_idx = headers.index('nominal')      if 'nominal'      in headers else 2
             type_idx   = headers.index('jenis')        if 'jenis'        in headers else 1
             date_idx   = headers.index('tanggal')      if 'tanggal'      in headers else 0
-            desc_idx   = headers.index('keterangan')   if 'keterangan'   in headers else 3
+            # Kolom D di sheet bernama "Deskripsi" — cek kedua kemungkinan nama
+            desc_idx   = headers.index('deskripsi')    if 'deskripsi'    in headers else \
+                         headers.index('keterangan')   if 'keterangan'   in headers else 3
             cat_idx    = headers.index('kategori')     if 'kategori'     in headers else 4
             src_idx    = headers.index('sumber')       if 'sumber'       in headers else 5
 
