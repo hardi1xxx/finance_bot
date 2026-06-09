@@ -314,8 +314,10 @@
           </tr>
         </thead>
         <tbody>
+          {% set has_income = namespace(found=false) %}
           {% for t in transactions %}
             {% if "Pemasukan" in t.type %}
+            {% set has_income.found = true %}
             <tr>
               <td style="color:var(--text-tertiary); white-space:nowrap;">{{ t.date }}</td>
               <td style="color:var(--text-secondary); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
@@ -327,6 +329,9 @@
             </tr>
             {% endif %}
           {% endfor %}
+          {% if not has_income.found %}
+            <tr><td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:20px 8px; font-size:12px;">Tidak ada data bulan {{ selected_month }}</td></tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
@@ -344,8 +349,10 @@
           </tr>
         </thead>
         <tbody>
+          {% set has_expense = namespace(found=false) %}
           {% for t in transactions %}
             {% if "Pengeluaran" in t.type %}
+            {% set has_expense.found = true %}
             <tr>
               <td style="color:var(--text-tertiary); white-space:nowrap;">{{ t.date }}</td>
               <td style="color:var(--text-secondary); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
@@ -357,6 +364,9 @@
             </tr>
             {% endif %}
           {% endfor %}
+          {% if not has_expense.found %}
+            <tr><td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:20px 8px; font-size:12px;">Tidak ada data bulan {{ selected_month }}</td></tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
