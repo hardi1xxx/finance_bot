@@ -29,14 +29,14 @@ class FinanceBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-        "💰 *Bot Keuangan AI*\n\n"
-        "📝 Cara pakai:\n"
-        "• makan 25rb\n"
-        "• gaji 3jt\n"
-        "• Kirim foto struk 📸\n\n"
-        "🌐 Dashboard:\n"
-        "https://financebot-production-a928.up.railway.app",
-        parse_mode='Markdown'
+            "💰 *Bot Keuangan AI*\n\n"
+            "📝 Cara pakai:\n"
+            "• makan 25rb\n"
+            "• gaji 3jt\n"
+            "• Kirim foto struk 📸\n\n"
+            "🌐 Dashboard:\n"
+            "https://financebot-production-a928.up.railway.app",
+            parse_mode='Markdown'
         )
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -64,11 +64,10 @@ class FinanceBot:
 
         text = update.message.text.strip()
 
-        # filter group
         if update.message.chat.type in ["group", "supergroup"]:
             if "@KeuanganQita_BOT" not in text:
                 return
-            text = text.replace("@KeuanganQita_BOT", "").strip()
+            text = text.replace("KeuanganQita_BOT", "").strip()
 
         try:
             data = parse_transaction(text)
@@ -90,42 +89,42 @@ class FinanceBot:
             await update.message.reply_text("❌ Format salah")
 
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        photo = await context.bot.get_file(update.message.photo[-1].file_id)
-        image_bytes = await photo.download_as_bytearray()
+        try:                                                           # ← fix: indentasi 8 spasi
+            photo = await context.bot.get_file(update.message.photo[-1].file_id)
+            image_bytes = await photo.download_as_bytearray()
 
-        result = self.ocr.extract_from_image(image_bytes)
-        amount = result.get('largest_amount', 0)
+            result = self.ocr.extract_from_image(image_bytes)
+            amount = result.get('largest_amount', 0)
 
-        if amount == 0:
+            if amount == 0:
+                await update.message.reply_text(
+                    "❌ Nominal tidak terbaca.\n"
+                    "💡 Tips: foto lebih dekat, pastikan angka TOTAL terlihat jelas."
+                )
+                return
+
+            merchant = result.get('description', 'Struk')
+            date_ocr = result.get('date', '-')
+
+            self.sheets.append_data({
+                'date': datetime.now().strftime('%d/%m/%Y %H:%M'),
+                'type': 'Pengeluaran',
+                'amount': amount,
+                'description': f'OCR: {merchant}',
+                'category': 'Lainnya',
+                'source': 'ocr'
+            })
+
             await update.message.reply_text(
-                "❌ Nominal tidak terbaca.\n"
-                "💡 Tips: foto lebih dekat, pastikan angka TOTAL terlihat jelas."
+                f"✅ *{merchant}*\n"
+                f"💸 Rp {amount:,.0f}\n"
+                f"📅 {date_ocr}",
+                parse_mode='Markdown'
             )
-            return
 
-        merchant = result.get('description', 'Struk')
-        date_ocr = result.get('date', '-')
-
-        self.sheets.append_data({
-            'date': datetime.now().strftime('%d/%m/%Y %H:%M'),
-            'type': 'Pengeluaran',
-            'amount': amount,
-            'description': f'OCR: {merchant}',
-            'category': 'Lainnya',
-            'source': 'ocr'
-        })
-
-        await update.message.reply_text(
-            f"✅ *{merchant}*\n"
-            f"💸 Rp {amount:,.0f}\n"
-            f"📅 {date_ocr}",
-            parse_mode='Markdown'
-        )
-
-    except Exception as e:
-        logger.error(f"handle_photo error: {e}", exc_info=True)
-        await update.message.reply_text("❌ OCR gagal. Coba kirim ulang foto.")
+        except Exception as e:
+            logger.error(f"handle_photo error: {e}", exc_info=True)
+            await update.message.reply_text("❌ OCR gagal. Coba kirim ulang foto.")
 
     async def summary(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         s = self.sheets.get_summary()
