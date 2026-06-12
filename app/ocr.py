@@ -142,8 +142,7 @@ class OCRProcessor:
                     # Cari angka di baris ini dulu
                     candidate = self._find_amount_in_line(line_s)
 
-                    # Jika tidak ada / 0, cek 1-2 baris berikutnya
-                    # (kasus TOTAL di baris sendiri, angka di baris bawahnya)
+                    # Jika tidak ada / terlalu kecil, cek baris SESUDAH
                     if not candidate or candidate < 500:
                         for j in range(i + 1, min(i + 3, len(lines))):
                             next_line = lines[j].strip()
@@ -155,18 +154,33 @@ class OCRProcessor:
                                 logger.info(f"TOTAL dari baris +{j-i}: {candidate} | '{next_line}'")
                                 break
 
+                    # Jika masih tidak ada, cek baris SEBELUM
+                    if not candidate or candidate < 500:
+                        for j in range(i - 1, max(i - 3, -1), -1):
+                            prev_line = lines[j].strip()
+                            if not prev_line:
+                                continue
+                            prev_candidate = self._find_amount_in_line(prev_line)
+                            if prev_candidate and prev_candidate >= 500:
+                                candidate = prev_candidate
+                                logger.info(f"TOTAL dari baris -{i-j}: {candidate} | '{prev_line}'")
+                                break
+
+                    # ← BUG FIX: assign total_amount jika candidate valid
                     if candidate and candidate >= 500:
                         if matched_priority < best_priority:
                             best_priority = matched_priority
-                            total_amount  = candidate
+                            total_amount  = candidate   # ← baris ini yang hilang sebelumnya
                             logger.info(f"TOTAL [{TOTAL_KEYWORDS[matched_priority]}] = {candidate} | '{line_s}'")
                         elif matched_priority == best_priority and candidate > (total_amount or 0):
                             total_amount = candidate
+                            logger.info(f"TOTAL update = {candidate} | '{line_s}'")
                 else:
                     candidate = self._find_amount_in_line(line_s)
                     if candidate and candidate >= 500:
                         fallback.append(candidate)
 
+            # Fallback: tidak ada keyword total sama sekali
             if total_amount is None and fallback:
                 fallback.sort(reverse=True)
                 total_amount = fallback[min(1, len(fallback) - 1)]
