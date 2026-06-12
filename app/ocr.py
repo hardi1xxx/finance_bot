@@ -1,7 +1,6 @@
 import io
 import re
 import logging
-import numpy as np
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
@@ -42,7 +41,6 @@ class OCRProcessor:
         pass
 
     def deskew(self, image: Image.Image) -> Image.Image:
-        """Koreksi kemiringan struk otomatis."""
         try:
             data = pytesseract.image_to_osd(image, output_type=pytesseract.Output.DICT)
             angle = data.get('rotate', 0)
@@ -57,15 +55,12 @@ class OCRProcessor:
         if image.mode != 'L':
             image = image.convert('L')
 
-        # Resize dulu sebelum deskew
         w, h = image.size
         if h < 1500:
             scale = 1500 / h
             image = image.resize((int(w * scale), 1500), Image.LANCZOS)
 
-        # Koreksi kemiringan
         image = self.deskew(image)
-
         image = ImageOps.autocontrast(image, cutoff=1)
         image = ImageEnhance.Contrast(image).enhance(2.0)
         image = image.filter(ImageFilter.SHARPEN)
@@ -101,6 +96,16 @@ class OCRProcessor:
             return True
         return False
 
+    def _find_amount_in_line(self, line: str):
+        """Cari angka terbesar yang valid di satu baris."""
+        numbers = re.findall(
+            r'\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?\b|\b\d{3,9}\b',
+            line
+        )
+        parsed = [self.parse_amount(n) for n in numbers]
+        valid  = [a for a in parsed if a and 500 <= a <= 100_000_000]
+        return max(valid) if valid else None
+
     def extract_from_image(self, image_bytes: bytes) -> dict:
         try:
             image = Image.open(io.BytesIO(image_bytes))
@@ -113,46 +118,54 @@ class OCRProcessor:
             )
             logger.info(f"OCR text:\n{text}")
 
-            lines = text.splitlines()
+            lines = [l.strip() for l in text.splitlines()]
             total_amount  = None
             best_priority = 999
             fallback      = []
 
-            for line in lines:
-                line_s = line.strip()
+            for i, line_s in enumerate(lines):
                 if not line_s:
                     continue
                 if self.is_noise_line(line_s):
                     continue
 
-                numbers = re.findall(
-                    r'\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?\b|\b\d{3,9}\b',
-                    line_s
-                )
-                parsed = [self.parse_amount(n) for n in numbers]
-                valid  = [a for a in parsed if a and 500 <= a <= 100_000_000]
-
-                if not valid:
-                    continue
-
-                candidate  = max(valid)
                 line_lower = line_s.lower()
 
+                # Cek keyword total di baris ini
                 matched_priority = None
-                for i, kw in enumerate(TOTAL_KEYWORDS):
+                for idx, kw in enumerate(TOTAL_KEYWORDS):
                     if kw in line_lower:
-                        matched_priority = i
+                        matched_priority = idx
                         break
 
                 if matched_priority is not None:
-                    if matched_priority < best_priority:
-                        best_priority = matched_priority
-                        total_amount  = candidate
-                        logger.info(f"TOTAL [{TOTAL_KEYWORDS[matched_priority]}] = {candidate} | '{line_s}'")
-                    elif matched_priority == best_priority and candidate > (total_amount or 0):
-                        total_amount = candidate
+                    # Cari angka di baris ini dulu
+                    candidate = self._find_amount_in_line(line_s)
+
+                    # Jika tidak ada / 0, cek 1-2 baris berikutnya
+                    # (kasus TOTAL di baris sendiri, angka di baris bawahnya)
+                    if not candidate or candidate < 500:
+                        for j in range(i + 1, min(i + 3, len(lines))):
+                            next_line = lines[j].strip()
+                            if not next_line:
+                                continue
+                            next_candidate = self._find_amount_in_line(next_line)
+                            if next_candidate and next_candidate >= 500:
+                                candidate = next_candidate
+                                logger.info(f"TOTAL dari baris +{j-i}: {candidate} | '{next_line}'")
+                                break
+
+                    if candidate and candidate >= 500:
+                        if matched_priority < best_priority:
+                            best_priority = matched_priority
+                            total_amount  = candidate
+                            logger.info(f"TOTAL [{TOTAL_KEYWORDS[matched_priority]}] = {candidate} | '{line_s}'")
+                        elif matched_priority == best_priority and candidate > (total_amount or 0):
+                            total_amount = candidate
                 else:
-                    fallback.append(candidate)
+                    candidate = self._find_amount_in_line(line_s)
+                    if candidate and candidate >= 500:
+                        fallback.append(candidate)
 
             if total_amount is None and fallback:
                 fallback.sort(reverse=True)
@@ -179,7 +192,7 @@ class OCRProcessor:
             r'\b(\d{4}-\d{2}-\d{2})\b',
             r'\b(\d{1,2}\s+\w+\s+\d{4})\b',
         ]:
-            m = re.search(p, text) if (p := pattern) else None
+            m = re.search(pattern, text)
             if m:
                 return m.group(1)
         return '-'
