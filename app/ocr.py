@@ -1,6 +1,7 @@
 import io
 import re
 import logging
+import numpy as np
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
@@ -40,14 +41,30 @@ class OCRProcessor:
     def __init__(self):
         pass
 
+    def deskew(self, image: Image.Image) -> Image.Image:
+        """Koreksi kemiringan struk otomatis."""
+        try:
+            data = pytesseract.image_to_osd(image, output_type=pytesseract.Output.DICT)
+            angle = data.get('rotate', 0)
+            if angle and angle != 0:
+                logger.info(f"Deskew: rotate {angle} derajat")
+                image = image.rotate(angle, expand=True, fillcolor=255)
+        except Exception as e:
+            logger.warning(f"Deskew skip: {e}")
+        return image
+
     def preprocess_image(self, image: Image.Image) -> Image.Image:
         if image.mode != 'L':
             image = image.convert('L')
 
+        # Resize dulu sebelum deskew
         w, h = image.size
         if h < 1500:
             scale = 1500 / h
             image = image.resize((int(w * scale), 1500), Image.LANCZOS)
+
+        # Koreksi kemiringan
+        image = self.deskew(image)
 
         image = ImageOps.autocontrast(image, cutoff=1)
         image = ImageEnhance.Contrast(image).enhance(2.0)
@@ -89,7 +106,6 @@ class OCRProcessor:
             image = Image.open(io.BytesIO(image_bytes))
             image = self.preprocess_image(image)
 
-            # Pass 1: baca full teks untuk konteks keyword
             text = pytesseract.image_to_string(
                 image,
                 lang='ind+eng',
@@ -98,9 +114,9 @@ class OCRProcessor:
             logger.info(f"OCR text:\n{text}")
 
             lines = text.splitlines()
-            total_amount = None
+            total_amount  = None
             best_priority = 999
-            fallback = []
+            fallback      = []
 
             for line in lines:
                 line_s = line.strip()
@@ -109,7 +125,6 @@ class OCRProcessor:
                 if self.is_noise_line(line_s):
                     continue
 
-                # Cari semua angka valid di baris ini
                 numbers = re.findall(
                     r'\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?\b|\b\d{3,9}\b',
                     line_s
@@ -120,10 +135,9 @@ class OCRProcessor:
                 if not valid:
                     continue
 
-                candidate = max(valid)
+                candidate  = max(valid)
                 line_lower = line_s.lower()
 
-                # Cari keyword total terbaik di baris ini
                 matched_priority = None
                 for i, kw in enumerate(TOTAL_KEYWORDS):
                     if kw in line_lower:
@@ -132,15 +146,14 @@ class OCRProcessor:
 
                 if matched_priority is not None:
                     if matched_priority < best_priority:
-                        best_priority  = matched_priority
-                        total_amount   = candidate
+                        best_priority = matched_priority
+                        total_amount  = candidate
                         logger.info(f"TOTAL [{TOTAL_KEYWORDS[matched_priority]}] = {candidate} | '{line_s}'")
                     elif matched_priority == best_priority and candidate > (total_amount or 0):
                         total_amount = candidate
                 else:
                     fallback.append(candidate)
 
-            # Fallback: tidak ada keyword total sama sekali
             if total_amount is None and fallback:
                 fallback.sort(reverse=True)
                 total_amount = fallback[min(1, len(fallback) - 1)]
@@ -166,7 +179,7 @@ class OCRProcessor:
             r'\b(\d{4}-\d{2}-\d{2})\b',
             r'\b(\d{1,2}\s+\w+\s+\d{4})\b',
         ]:
-            m = re.search(pattern, text)
+            m = re.search(p, text) if (p := pattern) else None
             if m:
                 return m.group(1)
         return '-'
