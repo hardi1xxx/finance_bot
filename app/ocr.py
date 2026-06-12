@@ -13,10 +13,10 @@ class OCRProcessor:
         self.client = anthropic.Anthropic()
 
     def extract_from_image(self, image_bytes: bytes) -> dict:
+        raw = ''
         try:
             image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
-            # Deteksi format gambar
             header = image_bytes[:12]
             if header[:3] == b'\xff\xd8\xff':
                 media_type = 'image/jpeg'
@@ -25,7 +25,9 @@ class OCRProcessor:
             elif header[:4] == b'RIFF' and header[8:12] == b'WEBP':
                 media_type = 'image/webp'
             else:
-                media_type = 'image/jpeg'  # default
+                media_type = 'image/jpeg'
+
+            logger.info(f"OCR: media_type={media_type}, size={len(image_bytes)} bytes")
 
             response = self.client.messages.create(
                 model='claude-haiku-4-5-20251001',
@@ -64,13 +66,16 @@ class OCRProcessor:
             )
 
             raw = response.content[0].text.strip()
-            # Bersihkan markdown code block jika ada
+            logger.info(f"OCR raw response: {raw}")
+
             raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw, flags=re.MULTILINE).strip()
             data = json.loads(raw)
 
-            # Parse total — hapus semua titik/koma ribuan
             raw_total = str(data.get('total', 0))
-            total = float(re.sub(r'[.,]', '', raw_total))
+            # Hapus titik ribuan dan koma, ambil angka saja
+            total = float(re.sub(r'[^\d]', '', raw_total) or '0')
+
+            logger.info(f"OCR result: merchant={data.get('merchant')}, total={total}, date={data.get('date')}")
 
             return {
                 'largest_amount': total,
@@ -81,7 +86,19 @@ class OCRProcessor:
             }
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e} | raw: {raw if 'raw' in dir() else 'N/A'}")
+            logger.error(f"JSON parse error: {e} | raw: {raw}")
+            return self._empty_result()
+
+        except anthropic.AuthenticationError as e:
+            logger.error(f"Anthropic API key invalid: {e}")
+            return self._empty_result()
+
+        except anthropic.APIConnectionError as e:
+            logger.error(f"Anthropic API connection failed: {e}")
+            return self._empty_result()
+
+        except anthropic.RateLimitError as e:
+            logger.error(f"Anthropic rate limit: {e}")
             return self._empty_result()
 
         except Exception as e:
