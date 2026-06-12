@@ -90,30 +90,42 @@ class FinanceBot:
             await update.message.reply_text("❌ Format salah")
 
     async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        try:
-            photo = await context.bot.get_file(update.message.photo[-1].file_id)
-            image_bytes = await photo.download_as_bytearray()
+    try:
+        photo = await context.bot.get_file(update.message.photo[-1].file_id)
+        image_bytes = await photo.download_as_bytearray()
 
-            result = self.ocr.extract_from_image(image_bytes)
-            amount = result.get('largest_amount', 0)
+        result = self.ocr.extract_from_image(image_bytes)
+        amount = result.get('largest_amount', 0)
 
-            if amount == 0:
-                await update.message.reply_text("❌ Tidak terbaca")
-                return
+        if amount == 0:
+            await update.message.reply_text(
+                "❌ Nominal tidak terbaca.\n"
+                "💡 Tips: foto lebih dekat, pastikan angka TOTAL terlihat jelas."
+            )
+            return
 
-            self.sheets.append_data({
-                'date': datetime.now().strftime('%d/%m/%Y %H:%M'),
-                'type': 'Pengeluaran',
-                'amount': amount,
-                'description': 'OCR',
-                'category': 'Lainnya',
-                'source': 'ocr'
-            })
+        merchant = result.get('description', 'Struk')
+        date_ocr = result.get('date', '-')
 
-            await update.message.reply_text(f"✅ Rp {amount:,.0f}")
+        self.sheets.append_data({
+            'date': datetime.now().strftime('%d/%m/%Y %H:%M'),
+            'type': 'Pengeluaran',
+            'amount': amount,
+            'description': f'OCR: {merchant}',
+            'category': 'Lainnya',
+            'source': 'ocr'
+        })
 
-        except Exception:
-            await update.message.reply_text("❌ OCR gagal")
+        await update.message.reply_text(
+            f"✅ *{merchant}*\n"
+            f"💸 Rp {amount:,.0f}\n"
+            f"📅 {date_ocr}",
+            parse_mode='Markdown'
+        )
+
+    except Exception as e:
+        logger.error(f"handle_photo error: {e}", exc_info=True)
+        await update.message.reply_text("❌ OCR gagal. Coba kirim ulang foto.")
 
     async def summary(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         s = self.sheets.get_summary()
