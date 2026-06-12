@@ -3,158 +3,188 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import io
 import re
 import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
 TOTAL_KEYWORDS = [
-    'total', 'jumlah', 'grand total', 'subtotal', 'sub total',
-    'bayar', 'tagihan', 'amount', 'charge', 'tunai', 'cash',
-    'total bayar', 'harus dibayar', 'yg harus dibayar'
+    'grand total', 'total bayar', 'total harga', 'harus dibayar',
+    'yg harus dibayar', 'yang harus dibayar',
+    'total',      # fallback — setelah yg lebih spesifik
+    'jumlah',
+    'subtotal',
+    'bayar',
+    'tagihan',
+    'tunai',
+    'cash',
+    'debit',
+    'kartu debit',
+    'qris',
 ]
 
-NOISE_KEYWORDS = [
-    'npwp', 'kode', 'no.', 'nomor', 'struk', 'kasir',
-    'telepon', 'telp', 'hp', 'member', 'id', 'ref'
+# Baris yang PASTI bukan nominal transaksi
+NOISE_PATTERNS = [
+    r'\b0\d{2,3}[-\s]\d{3,4}[-\s]\d{3,6}\b',  # nomor telepon: 0811-3483-516
+    r'\bM0\d+\b',                                # kode struk: M025202...
+    r'\bSM0\d+\b',                               # sales no
+    r'\b\d{10,}\b',                              # barcode / nomor panjang > 9 digit
 ]
+
+SKIP_LINE_KEYWORDS = [
+    'npwp', 'sales no', 'reff no', 'ref no', 'no struk',
+    'telepon', 'telp', 'phone', 'hp :', 'fax',
+    'loyalty', 'member', 'server', 'cashier', 'kasir :',
+    'ig :', 'instagram', 'website', 'wifi',
+    'terima kasih', 'kami tunggu', 'barang yang telah',
+    'price inclusive', 'pajak', 'pb1',
+    'pembulatan',   # biasanya nominal kecil/negatif
+]
+
 
 class OCRProcessor:
     def preprocess_image(self, image):
         if image.mode != 'L':
             image = image.convert('L')
 
-        # Resize untuk resolusi lebih baik (min 1000px tinggi)
         w, h = image.size
-        if h < 1000:
-            scale = 1000 / h
-            image = image.resize((int(w * scale), 1000), Image.LANCZOS)
+        if h < 1200:
+            scale = 1200 / h
+            image = image.resize((int(w * scale), 1200), Image.LANCZOS)
 
-        # Auto-contrast sebelum enhance
-        image = ImageOps.autocontrast(image, cutoff=2)
+        image = ImageOps.autocontrast(image, cutoff=1)
 
-        # Enhance contrast
         enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(2.5)
+        image = enhancer.enhance(2.0)
 
-        # Sharpen
         image = image.filter(ImageFilter.SHARPEN)
-        image = image.filter(ImageFilter.SHARPEN)  # double sharpen untuk struk buram
 
-        # Threshold binarization — struk thermal sering abu-abu
-        threshold = 140
-        image = image.point(lambda p: 255 if p > threshold else 0, '1').convert('L')
+        # Binarization
+        image = image.point(lambda p: 255 if p > 150 else 0, '1').convert('L')
 
         return image
 
-    def parse_amount(self, raw: str) -> float | None:
-        """Konversi string angka format Indonesia ke float."""
-        s = raw.strip()
-        # Hapus karakter non-numerik kecuali titik dan koma
-        s = re.sub(r'[^\d.,]', '', s)
-        if not s:
+    def parse_amount(self, raw: str):
+        s = re.sub(r'[^\d.,]', '', raw.strip())
+        if not s or len(s) < 2:
             return None
-
         try:
-            # Format: 1.234.567 atau 1.234.567,89
+            # 1.234.567 atau 1.234.567,89
             if re.match(r'^\d{1,3}(\.\d{3})+(,\d{1,2})?$', s):
-                s = s.replace('.', '').replace(',', '.')
-                return float(s)
-
-            # Format: 1,234,567 atau 1,234,567.89
+                return float(s.replace('.', '').replace(',', '.'))
+            # 1,234,567
             if re.match(r'^\d{1,3}(,\d{3})+(\.\d{1,2})?$', s):
-                s = s.replace(',', '')
-                return float(s)
-
-            # Koma sebagai desimal: 12345,89
+                return float(s.replace(',', ''))
+            # 12345,89
             if re.match(r'^\d+(,\d{1,2})$', s):
                 return float(s.replace(',', '.'))
-
-            # Plain integer / decimal
-            return float(s.replace(',', ''))
+            # plain
+            cleaned = s.replace(',', '').replace('.', '')
+            return float(cleaned) if cleaned else None
         except ValueError:
             return None
+
+    def _line_has_noise_pattern(self, line: str) -> bool:
+        for pat in NOISE_PATTERNS:
+            if re.search(pat, line, re.IGNORECASE):
+                return True
+        return False
+
+    def _should_skip_line(self, line_lower: str) -> bool:
+        return any(kw in line_lower for kw in SKIP_LINE_KEYWORDS)
 
     def extract_from_image(self, image_bytes: bytes) -> dict:
         try:
             image = Image.open(io.BytesIO(image_bytes))
             image = self.preprocess_image(image)
 
-            # Mode 1: baca seluruh teks termasuk huruf (untuk konteks keyword)
             text_full = pytesseract.image_to_string(
                 image,
                 lang='ind+eng',
                 config='--oem 3 --psm 6'
             )
-            logger.debug(f"OCR full text:\n{text_full}")
-
-            # Mode 2: fokus baca angka saja (lebih akurat untuk nominal)
-            text_num = pytesseract.image_to_string(
-                image,
-                lang='ind+eng',
-                config=r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789.,: '
-            )
+            logger.debug(f"OCR raw text:\n{text_full}")
 
             lines = text_full.splitlines()
             total_amount = None
             fallback_amounts = []
+            total_keyword_line = None
 
             for line in lines:
-                line_lower = line.lower()
+                line_lower = line.lower().strip()
 
-                # Skip baris yang kemungkinan noise (kode, nomor referensi, dll)
-                if any(noise in line_lower for noise in NOISE_KEYWORDS):
+                if not line_lower:
                     continue
 
-                # Cari angka di baris ini
+                # Skip baris noise berdasarkan keyword
+                if self._should_skip_line(line_lower):
+                    continue
+
+                # Skip baris yang mengandung pola noise (nomor telp, barcode)
+                if self._line_has_noise_pattern(line):
+                    continue
+
+                # Cari semua angka di baris ini
                 numbers = re.findall(
-                    r'\b(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d{4,})\b',
+                    r'\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?\b|\b\d{4,9}\b',
                     line
                 )
-
                 parsed = [self.parse_amount(n) for n in numbers]
-                valid = [a for a in parsed if a and a >= 100]  # minimal Rp 100
+                # Filter: minimal Rp 500, maksimal Rp 50 juta (hindari barcode)
+                valid = [a for a in parsed if a and 500 <= a <= 50_000_000]
 
                 if not valid:
                     continue
 
-                candidate = max(valid)  # ambil angka terbesar di baris ini
+                candidate = max(valid)
 
-                # Prioritas: baris yang mengandung keyword total/bayar
-                if any(kw in line_lower for kw in TOTAL_KEYWORDS):
-                    # Update total_amount hanya jika lebih besar
-                    # (guard dari pajak/diskon yang muncul setelah TOTAL)
-                    if total_amount is None or candidate > total_amount:
+                # Cek apakah baris ini keyword total — dari yang paling spesifik
+                matched_kw = None
+                for kw in TOTAL_KEYWORDS:
+                    if kw in line_lower:
+                        matched_kw = kw
+                        break
+
+                if matched_kw:
+                    # Prioritas: keyword lebih spesifik (index lebih kecil di list) menang
+                    kw_priority = TOTAL_KEYWORDS.index(matched_kw)
+                    if total_keyword_line is None or kw_priority < total_keyword_line[0]:
                         total_amount = candidate
-                        logger.debug(f"  -> TOTAL match: {candidate} dari '{line.strip()}'")
+                        total_keyword_line = (kw_priority, candidate)
+                        logger.debug(f"TOTAL [{matched_kw}]: {candidate} <- '{line.strip()}'")
+                    elif kw_priority == total_keyword_line[0] and candidate > total_amount:
+                        # Keyword sama, ambil yang lebih besar
+                        total_amount = candidate
+                        logger.debug(f"TOTAL update [{matched_kw}]: {candidate} <- '{line.strip()}'")
                 else:
-                    fallback_amounts.extend(valid)
+                    fallback_amounts.append(candidate)
 
-            # Jika tidak ada keyword total, ambil median atas (bukan max — max sering barcode)
+            # Fallback: tidak ada keyword total
             if total_amount is None and fallback_amounts:
                 fallback_amounts.sort(reverse=True)
-                # Ambil angka ke-2 terbesar (ke-1 sering nomor struk/kode)
-                idx = min(1, len(fallback_amounts) - 1)
-                total_amount = fallback_amounts[idx]
-                logger.debug(f"  -> Fallback amount: {total_amount}")
+                # Lewati angka terbesar pertama (sering harga satuan tertinggi / kode)
+                total_amount = fallback_amounts[min(1, len(fallback_amounts) - 1)]
+                logger.debug(f"Fallback amount: {total_amount}")
 
             return {
                 'text': text_full.strip(),
                 'amounts': fallback_amounts,
                 'largest_amount': total_amount or 0,
                 'date': self._extract_date(text_full),
-                'description': self._extract_merchant(text_full),
+                'description': self._extract_merchant(lines),
             }
 
         except Exception as e:
             logger.error(f"OCR error: {e}", exc_info=True)
-            return {'text': '', 'amounts': [], 'largest_amount': 0, 'date': '-', 'description': 'OCR'}
+            return {
+                'text': '', 'amounts': [], 'largest_amount': 0,
+                'date': '-', 'description': 'Struk'
+            }
 
     def _extract_date(self, text: str) -> str:
-        """Coba ekstrak tanggal dari teks struk."""
         patterns = [
-            r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b',
-            r'\b(\d{1,2}\s+\w+\s+\d{4})\b',
-            r'\b(\d{4}[/-]\d{2}[/-]\d{2})\b',
+            r'\b(\d{2}-\d{2}-\d{4})\b',          # 29-05-2026
+            r'\b(\d{2}/\d{2}/\d{4})\b',           # 21/09/2025
+            r'\b(\d{4}-\d{2}-\d{2})\b',           # 2026-05-29
+            r'\b(\d{1,2}\s+\w+\s+\d{4})\b',       # 29 Mei 2026
         ]
         for p in patterns:
             m = re.search(p, text)
@@ -162,11 +192,31 @@ class OCRProcessor:
                 return m.group(1)
         return '-'
 
-    def _extract_merchant(self, text: str) -> str:
-        """Ambil 1-2 baris pertama sebagai nama merchant."""
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        # Skip baris sangat pendek (sering noise)
-        candidates = [l for l in lines[:5] if len(l) > 3]
-        if candidates:
-            return candidates[0][:40]  # max 40 karakter
+    def _extract_merchant(self, lines: list) -> str:
+        """
+        Ambil nama merchant: cari baris teks murni (tanpa angka dominan)
+        di 8 baris pertama, skip baris sangat pendek atau penuh simbol.
+        """
+        skip_words = [
+            'jl.', 'jalan', 'kec.', 'kel.', 'kota', 'no.',
+            'telp', 'hp', 'fax', 'bandung', 'jakarta',
+            'reff', 'date', 'tanggal', 'kasir', 'server',
+            'dine', 'tipe', 'pelanggan', 'loyalty',
+        ]
+        for line in lines[:10]:
+            s = line.strip()
+            if len(s) < 4:
+                continue
+            # Skip jika mayoritas angka
+            digit_ratio = sum(c.isdigit() for c in s) / max(len(s), 1)
+            if digit_ratio > 0.4:
+                continue
+            # Skip jika mengandung kata alamat/operasional
+            if any(kw in s.lower() for kw in skip_words):
+                continue
+            # Skip simbol berlebihan
+            symbol_ratio = sum(not c.isalnum() and c not in ' -.' for c in s) / max(len(s), 1)
+            if symbol_ratio > 0.3:
+                continue
+            return s[:40]
         return 'Struk'
