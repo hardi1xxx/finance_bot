@@ -3,6 +3,7 @@ import re
 import json
 import base64
 import logging
+import os
 import anthropic
 
 logger = logging.getLogger(__name__)
@@ -10,10 +11,15 @@ logger = logging.getLogger(__name__)
 
 class OCRProcessor:
     def __init__(self):
-        self.client = anthropic.Anthropic()
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY tidak ditemukan di environment!")
+        logger.info(f"OCR init: API key found, starts with {api_key[:15]}...")
+        self.client = anthropic.Anthropic(api_key=api_key)
 
     def extract_from_image(self, image_bytes: bytes) -> dict:
         raw = ''
+        error_detail = ''
         try:
             image_b64 = base64.b64encode(image_bytes).decode('utf-8')
 
@@ -72,7 +78,6 @@ class OCRProcessor:
             data = json.loads(raw)
 
             raw_total = str(data.get('total', 0))
-            # Hapus titik ribuan dan koma, ambil angka saja
             total = float(re.sub(r'[^\d]', '', raw_total) or '0')
 
             logger.info(f"OCR result: merchant={data.get('merchant')}, total={total}, date={data.get('date')}")
@@ -83,27 +88,32 @@ class OCRProcessor:
                 'date': data.get('date', '-'),
                 'text': raw,
                 'amounts': [total],
+                'error': '',
             }
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e} | raw: {raw}")
-            return self._empty_result()
-
         except anthropic.AuthenticationError as e:
-            logger.error(f"Anthropic API key invalid: {e}")
-            return self._empty_result()
+            error_detail = f'Auth error: {str(e)[:100]}'
+            logger.error(error_detail)
 
         except anthropic.APIConnectionError as e:
-            logger.error(f"Anthropic API connection failed: {e}")
-            return self._empty_result()
+            error_detail = f'Connection error: {str(e)[:100]}'
+            logger.error(error_detail)
 
-        except anthropic.RateLimitError as e:
-            logger.error(f"Anthropic rate limit: {e}")
-            return self._empty_result()
+        except anthropic.BadRequestError as e:
+            error_detail = f'Bad request: {str(e)[:100]}'
+            logger.error(error_detail)
+
+        except json.JSONDecodeError as e:
+            error_detail = f'JSON error: {e} | raw: {raw[:100]}'
+            logger.error(error_detail)
 
         except Exception as e:
+            error_detail = f'{type(e).__name__}: {str(e)[:100]}'
             logger.error(f"Claude OCR error: {e}", exc_info=True)
-            return self._empty_result()
+
+        result = self._empty_result()
+        result['error'] = error_detail
+        return result
 
     def _empty_result(self) -> dict:
         return {
@@ -112,4 +122,5 @@ class OCRProcessor:
             'date': '-',
             'text': '',
             'amounts': [],
+            'error': '',
         }
